@@ -57,7 +57,6 @@ export function findUser(email: string): OnFormUser | undefined {
 }
 
 export function createUser(input: { name: string; email: string; password: string; role: UserRole }): OnFormUser {
-  seedDemoAccountsIfEmpty();
   const users = readUsers();
   const user: OnFormUser = { ...input, createdAt: new Date().toISOString() };
   users.push(user);
@@ -66,7 +65,6 @@ export function createUser(input: { name: string; email: string; password: strin
 }
 
 export function listParticipants(): PublicUser[] {
-  seedDemoAccountsIfEmpty();
   return readUsers()
     .filter((u) => u.role === 'participant')
     .map((u) => ({ email: u.email, name: u.name, role: u.role }));
