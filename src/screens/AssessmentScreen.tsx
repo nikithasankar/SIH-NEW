@@ -17,6 +17,9 @@ import { closePoseLandmarker } from '../services/poseDetectionService';
 import { useVoiceFeedback } from '../hooks/useVoiceFeedback';
 import { getCoachFeedback } from '../logic/coachFeedback';
 import type { SessionResult } from '../models/sessionResult';
+import { WorkoutVisualAnalytics } from '../components/WorkoutVisualAnalytics';
+import { SocialFeaturesCard } from '../components/SocialFeaturesCard';
+import { DigitalTwinAthlete } from '../components/DigitalTwinAthlete';
 
 type AssessmentPhase = 'preview' | 'active' | 'summary';
 
@@ -185,7 +188,7 @@ export function AssessmentScreen() {
       </div>
 
       {phase !== 'summary' && (
-        <div className="w-full max-w-2xl">
+        <div className="w-full max-w-4xl flex flex-col items-center">
           <CameraFeed
             active={phase === 'preview' || phase === 'active'}
             onReady={handleCameraReady}
@@ -277,31 +280,46 @@ export function AssessmentScreen() {
               </div>
             )}
           </CameraFeed>
+
+          {/* Requirement 2: Digital Twin Athlete Skeleton below camera */}
+          <DigitalTwinAthlete
+            landmarks={landmarks}
+            isPositionOk={status.isPositionOk}
+            isActive={phase === 'active'}
+            exerciseName={exercise.displayName}
+          />
         </div>
       )}
 
-      {/* Summary phase */}
+      {/* Summary phase (Requirements 1 & 6) */}
       {phase === 'summary' && savedSession && (
-        <div className="w-full max-w-2xl">
+        <div className="w-full max-w-4xl space-y-6">
           <SummaryCard
             exerciseName={exercise.displayName}
             icon={exercise.iconAsset}
             mode={exercise.mode}
             session={savedSession}
           />
-          <div className="flex gap-3 mt-6">
+
+          {/* 7 Visual Analytics Graphs & Confetti */}
+          <WorkoutVisualAnalytics session={savedSession} exerciseName={exercise.displayName} />
+
+          {/* Social Features Card */}
+          <SocialFeaturesCard session={savedSession} exerciseName={exercise.displayName} />
+
+          <div className="flex gap-4 pt-4">
             <button
               onClick={handleTryAgain}
-              className="flex-1 glass-card py-3 font-medium hover:opacity-90 transition-opacity"
+              className="flex-1 glass-card py-3.5 rounded-2xl font-bold text-white hover:opacity-90 transition-opacity text-center"
             >
-              Try Again
+              Do It Again 🔄
             </button>
             <button
-              onClick={() => (savedSessionId != null ? navigate(`/app/passport/${savedSessionId}`) : navigate('/app/history'))}
-              className="flex-1 py-3 rounded-2xl font-semibold neon-glow hover:scale-[1.02] active:scale-[0.98] transition-transform"
-              style={{ background: 'var(--color-primary)', color: 'var(--color-background)' }}
+              onClick={() => navigate('/app/history')}
+              className="flex-1 py-3.5 rounded-2xl font-bold text-black neon-glow hover:scale-[1.02] active:scale-[0.98] transition-transform text-center"
+              style={{ background: 'var(--color-primary)' }}
             >
-              View Passport
+              Finish & Save Session ✓
             </button>
           </div>
         </div>

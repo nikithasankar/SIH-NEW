@@ -130,10 +130,12 @@ export const HomeDashboard: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-3">
-          <div className="px-4 py-2.5 rounded-2xl glass-card flex items-center gap-2.5 text-xs font-mono text-slate-300">
-            <span className="h-2 w-2 rounded-full bg-emerald-400" />
-            <span>AI Voice: Online</span>
-          </div>
+          <button
+            onClick={() => navigate('/app/status')}
+            className="px-4 py-2.5 rounded-2xl glass-card flex items-center gap-2 text-xs font-bold text-white hover:border-primary/50 transition-colors"
+          >
+            <span>📊</span> View Status
+          </button>
           <button
             onClick={() => navigate('/app/exercises')}
             className="px-5 py-2.5 rounded-2xl text-xs font-bold text-black transition-transform duration-150 hover:scale-105 active:scale-95 shadow-[0_0_15px_rgba(214,255,63,0.25)]"

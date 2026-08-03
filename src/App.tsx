@@ -14,6 +14,7 @@ import { PassportScreen } from './screens/PassportScreen';
 import { HistoryScreen } from './screens/HistoryScreen';
 import { ProgressScreen } from './screens/ProgressScreen';
 import { ProfileScreen } from './screens/ProfileScreen';
+import { AthleteStatusScreen } from './screens/AthleteStatusScreen';
 import { ScoutDashboard } from './screens/scout/ScoutDashboard';
 
 export default function App() {
@@ -39,6 +40,7 @@ export default function App() {
                 <Route index element={<HomeDashboard />} />
                 <Route path="exercises" element={<ExercisePicker />} />
                 <Route path="assess/:exerciseId" element={<AssessmentScreen />} />
+                <Route path="status" element={<AthleteStatusScreen />} />
                 <Route path="passport/:sessionId" element={<PassportScreen />} />
                 <Route path="history" element={<HistoryScreen />} />
                 <Route path="progress" element={<ProgressScreen />} />
