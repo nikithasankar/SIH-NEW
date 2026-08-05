@@ -265,6 +265,17 @@ export function updateAthleteStatus(
         recruitedBy: scoutName,
       });
     }
+
+    try {
+      window.dispatchEvent(
+        new CustomEvent('athlete_status_updated', {
+          detail: { email: normalized, status, scoutName, recruitDate: users[index].recruitDate },
+        })
+      );
+    } catch {
+      // ignore in non-browser context
+    }
+
     return users[index];
   }
   return undefined;

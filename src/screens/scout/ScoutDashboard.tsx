@@ -8,6 +8,8 @@ import type { RecruitmentStatus } from '../../auth/user';
 import { ScoutFilters, type FilterState } from '../../components/scout/ScoutFilters';
 import { AthletePerformanceModal } from '../../components/scout/AthletePerformanceModal';
 
+type ScoutTab = 'roster' | 'recruited' | 'shortlisted' | 'watchlist' | 'rejected';
+
 function formatDuration(totalSeconds: number): string {
   const mins = Math.floor(totalSeconds / 60);
   const secs = totalSeconds % 60;
@@ -44,7 +46,10 @@ function SuggestionChip({ session }: { session: SessionResult }) {
   return (
     <ul className="mt-2 space-y-1.5">
       {suggestions.map((s, i) => (
-        <li key={i} className="text-xs text-secondary-color flex items-center gap-2 bg-secondary/5 px-3 py-1.5 rounded-lg border border-secondary/10">
+        <li
+          key={i}
+          className="text-xs text-secondary-color flex items-center gap-2 bg-secondary/5 px-3 py-1.5 rounded-lg border border-secondary/10"
+        >
           <span>💡</span>
           <span className="font-medium">{s}</span>
         </li>
@@ -123,7 +128,10 @@ function AthleteSessionRow({
               </span>
               <div className="space-y-2">
                 {notes.map((n, i) => (
-                  <div key={i} className="glass-card p-3 rounded-xl bg-[var(--color-background)] border border-[var(--glass-border)]">
+                  <div
+                    key={i}
+                    className="glass-card p-3 rounded-xl bg-[var(--color-background)] border border-[var(--glass-border)]"
+                  >
                     <p className="text-xs text-white leading-relaxed">{n.note}</p>
                     <p className="text-[10px] text-muted font-mono mt-1">
                       — {n.scoutName} ({scoutEmail}) · {new Date(n.createdAt).toLocaleDateString()}
@@ -272,7 +280,17 @@ function AthleteCard({
               <span className="text-xs font-mono font-bold uppercase tracking-wider text-muted">
                 Recent Sessions ({athlete.sessions.length})
               </span>
-              <span className="text-[10px] font-mono text-muted">{relativeTime(athlete.lastActive)}</span>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-mono text-muted">{relativeTime(athlete.lastActive)}</span>
+                {athlete.sessions.length > 2 && (
+                  <button
+                    onClick={() => setExpanded((v) => !v)}
+                    className="text-[10px] text-primary hover:underline font-mono"
+                  >
+                    {expanded ? 'Show Less' : `+${athlete.sessions.length - 2} more`}
+                  </button>
+                )}
+              </div>
             </div>
             {visibleSessions.map((s) => (
               <AthleteSessionRow
@@ -287,10 +305,10 @@ function AthleteCard({
         )}
       </div>
 
-      {/* Requirement 4: 📌 Recruit Buttons on Every Athlete Card */}
+      {/* Scout Status Actions (Recruit, Shortlist, Watchlist, Reject) */}
       <div className="mt-5 pt-4 border-t border-[var(--glass-border)] space-y-2">
         <span className="text-[10px] font-mono font-bold uppercase text-muted tracking-wider block">
-          📌 Scout Recruit Actions
+          📌 Scout Decision Control
         </span>
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -346,7 +364,8 @@ function AthleteCard({
 export function ScoutDashboard() {
   const { user, logout } = useAuth();
   const { participants, notesBySession, loading, addNote, refresh } = useScoutData();
-  const [activeTab, setActiveTab] = useState<'roster' | 'recruited'>('roster');
+  const [activeTab, setActiveTab] = useState<ScoutTab>('roster');
+  const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
   const [selectedAthleteForModal, setSelectedAthleteForModal] = useState<ParticipantSummary | null>(null);
 
   const [filters, setFilters] = useState<FilterState>({
@@ -371,19 +390,19 @@ export function ScoutDashboard() {
 
   const [sortBy, setSortBy] = useState<'recent' | 'sessions' | 'accuracy' | 'score'>('recent');
 
-  // Requirement 4: Recruitment Dashboard KPI Cards
+  // Metrics summary counts across all statuses
   const recruitmentMetrics = useMemo(() => {
     let shortlisted = 0;
     let recruited = 0;
     let pendingReview = 0;
-    let trialInvitesSent = 0;
+    let trialInvites = 0;
     let rejected = 0;
 
     participants.forEach((p) => {
       const st = p.recruitmentStatus || 'Pending';
       if (st === 'Shortlisted') shortlisted++;
       else if (st === 'Recruited') recruited++;
-      else if (st === 'Trial Invited') trialInvitesSent++;
+      else if (st === 'Trial Invited') trialInvites++;
       else if (st === 'Under Review' || st === 'Pending') pendingReview++;
       else if (st === 'Rejected') rejected++;
     });
@@ -393,14 +412,38 @@ export function ScoutDashboard() {
       shortlisted,
       recruited,
       pendingReview,
-      trialInvitesSent,
+      trialInvites,
       rejected,
     };
   }, [participants]);
 
-  // Filter & Sort Participants
+  // Tab Filtering: Filter athletes according to the selected ScoutTab
+  const athletesInCurrentTab = useMemo(() => {
+    return participants.filter((p) => {
+      const st = p.recruitmentStatus || 'Pending';
+      if (activeTab === 'roster') {
+        // Active Roster shows all non-rejected athletes (or pending/under review)
+        return st !== 'Rejected';
+      }
+      if (activeTab === 'recruited') {
+        return st === 'Recruited';
+      }
+      if (activeTab === 'shortlisted') {
+        return st === 'Shortlisted';
+      }
+      if (activeTab === 'watchlist') {
+        return st === 'Trial Invited' || st === 'Under Review';
+      }
+      if (activeTab === 'rejected') {
+        return st === 'Rejected';
+      }
+      return true;
+    });
+  }, [participants, activeTab]);
+
+  // Search, Filter & Sort on current tab's athletes
   const filteredAndSorted = useMemo(() => {
-    let result = participants;
+    let result = athletesInCurrentTab;
 
     const q = filters.searchQuery.trim().toLowerCase();
     if (q) {
@@ -408,7 +451,9 @@ export function ScoutDashboard() {
         (p) =>
           p.name.toLowerCase().includes(q) ||
           p.email.toLowerCase().includes(q) ||
-          (p.athleteId && p.athleteId.toLowerCase().includes(q))
+          (p.athleteId && p.athleteId.toLowerCase().includes(q)) ||
+          (p.sport && p.sport.toLowerCase().includes(q)) ||
+          (p.position && p.position.toLowerCase().includes(q))
       );
     }
 
@@ -456,11 +501,7 @@ export function ScoutDashboard() {
       const timeB = b.lastActive ? new Date(b.lastActive).getTime() : 0;
       return timeB - timeA;
     });
-  }, [participants, filters, sortBy]);
-
-  const recruitedList = useMemo(() => {
-    return participants.filter((p) => p.recruitmentStatus === 'Recruited' || p.recruitmentStatus === 'Shortlisted');
-  }, [participants]);
+  }, [athletesInCurrentTab, filters, sortBy]);
 
   const resetFilters = () => {
     setFilters({
@@ -484,6 +525,21 @@ export function ScoutDashboard() {
     });
   };
 
+  const getTabTitle = () => {
+    switch (activeTab) {
+      case 'roster':
+        return '🏃 Active Candidate Pool';
+      case 'recruited':
+        return '🟢 Official Recruited Athletes';
+      case 'shortlisted':
+        return '⭐ Priority Shortlisted Prospects';
+      case 'watchlist':
+        return '🟡 Watchlist & Trial Candidates';
+      case 'rejected':
+        return '🔴 Rejected / Archived Profiles';
+    }
+  };
+
   return (
     <div className="min-h-dvh w-full bg-[var(--color-background)] text-white px-6 md:px-10 py-8 md:py-12 max-w-7xl mx-auto flex flex-col gap-8">
       {/* Header Bar */}
@@ -499,7 +555,7 @@ export function ScoutDashboard() {
             Welcome, {user?.name ?? 'Coach Priya'}
           </h1>
           <p className="text-muted text-sm mt-1">
-            Real-time biomechanical intelligence, multi-category talent search & recruitment control.
+            Real-time biomechanical intelligence, categorized talent management & recruitment actions.
           </p>
         </div>
 
@@ -516,81 +572,160 @@ export function ScoutDashboard() {
         </div>
       </div>
 
-      {/* Requirement 4: 📈 Recruitment Dashboard KPI Summary Grid */}
+      {/* KPI Cards: Clickable quick-jump summary */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">
-          <h3 className="text-sm font-mono font-bold text-muted uppercase tracking-wider">📈 Recruitment Dashboard</h3>
-          <span className="text-xs text-primary font-mono font-bold">Live Status Tracking</span>
+          <h3 className="text-sm font-mono font-bold text-muted uppercase tracking-wider">
+            📈 Recruitment Pipeline Overview
+          </h3>
+          <span className="text-xs text-primary font-mono font-bold">Real-Time Sync</span>
         </div>
 
-        <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
-          <div className="glass-card p-4 flex flex-col justify-between">
-            <span className="text-[10px] font-mono font-semibold text-muted uppercase">Total Athletes</span>
-            <div className="text-2xl sm:text-3xl font-black text-white mt-1">{recruitmentMetrics.total}</div>
-            <span className="text-[10px] text-muted mt-1">Roster Count</span>
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+          <div
+            onClick={() => setActiveTab('roster')}
+            className={`glass-card p-4 flex flex-col justify-between cursor-pointer transition-all hover:scale-[1.02] ${
+              activeTab === 'roster' ? 'border-[var(--color-primary)] ring-1 ring-[var(--color-primary)]' : ''
+            }`}
+          >
+            <span className="text-[10px] font-mono font-semibold text-muted uppercase">Active Roster</span>
+            <div className="text-2xl sm:text-3xl font-black text-white mt-1">
+              {participants.length - recruitmentMetrics.rejected}
+            </div>
+            <span className="text-[10px] text-muted mt-1">Candidate Pool</span>
           </div>
 
-          <div className="glass-card p-4 flex flex-col justify-between border-emerald-500/30">
-            <span className="text-[10px] font-mono font-semibold text-emerald-400 uppercase">Recruited</span>
+          <div
+            onClick={() => setActiveTab('recruited')}
+            className={`glass-card p-4 flex flex-col justify-between border-emerald-500/30 cursor-pointer transition-all hover:scale-[1.02] ${
+              activeTab === 'recruited' ? 'border-emerald-400 ring-1 ring-emerald-400' : ''
+            }`}
+          >
+            <span className="text-[10px] font-mono font-semibold text-emerald-400 uppercase">Recruited 🟢</span>
             <div className="text-2xl sm:text-3xl font-black text-emerald-400 mt-1">{recruitmentMetrics.recruited}</div>
             <span className="text-[10px] text-muted mt-1">Signed Talent</span>
           </div>
 
-          <div className="glass-card p-4 flex flex-col justify-between border-cyan-500/30">
-            <span className="text-[10px] font-mono font-semibold text-cyan-400 uppercase">Shortlisted</span>
+          <div
+            onClick={() => setActiveTab('shortlisted')}
+            className={`glass-card p-4 flex flex-col justify-between border-cyan-500/30 cursor-pointer transition-all hover:scale-[1.02] ${
+              activeTab === 'shortlisted' ? 'border-cyan-400 ring-1 ring-cyan-400' : ''
+            }`}
+          >
+            <span className="text-[10px] font-mono font-semibold text-cyan-400 uppercase">Shortlisted ⭐</span>
             <div className="text-2xl sm:text-3xl font-black text-cyan-400 mt-1">{recruitmentMetrics.shortlisted}</div>
             <span className="text-[10px] text-muted mt-1">Top Prospects</span>
           </div>
 
-          <div className="glass-card p-4 flex flex-col justify-between border-amber-500/30">
-            <span className="text-[10px] font-mono font-semibold text-amber-400 uppercase">Trial Invites</span>
-            <div className="text-2xl sm:text-3xl font-black text-amber-400 mt-1">{recruitmentMetrics.trialInvitesSent}</div>
-            <span className="text-[10px] text-muted mt-1">Invites Sent</span>
-          </div>
-
-          <div className="glass-card p-4 flex flex-col justify-between border-orange-500/30">
-            <span className="text-[10px] font-mono font-semibold text-orange-400 uppercase">Pending Review</span>
-            <div className="text-2xl sm:text-3xl font-black text-orange-400 mt-1">{recruitmentMetrics.pendingReview}</div>
+          <div
+            onClick={() => setActiveTab('watchlist')}
+            className={`glass-card p-4 flex flex-col justify-between border-amber-500/30 cursor-pointer transition-all hover:scale-[1.02] ${
+              activeTab === 'watchlist' ? 'border-amber-400 ring-1 ring-amber-400' : ''
+            }`}
+          >
+            <span className="text-[10px] font-mono font-semibold text-amber-400 uppercase">Watchlist / Trials 🟡</span>
+            <div className="text-2xl sm:text-3xl font-black text-amber-400 mt-1">
+              {recruitmentMetrics.trialInvites + recruitmentMetrics.pendingReview}
+            </div>
             <span className="text-[10px] text-muted mt-1">Under Evaluation</span>
           </div>
 
-          <div className="glass-card p-4 flex flex-col justify-between border-rose-500/30">
-            <span className="text-[10px] font-mono font-semibold text-rose-400 uppercase">Rejected</span>
+          <div
+            onClick={() => setActiveTab('rejected')}
+            className={`glass-card p-4 flex flex-col justify-between border-rose-500/30 cursor-pointer transition-all hover:scale-[1.02] ${
+              activeTab === 'rejected' ? 'border-rose-400 ring-1 ring-rose-400' : ''
+            }`}
+          >
+            <span className="text-[10px] font-mono font-semibold text-rose-400 uppercase">Rejected 🔴</span>
             <div className="text-2xl sm:text-3xl font-black text-rose-400 mt-1">{recruitmentMetrics.rejected}</div>
-            <span className="text-[10px] text-muted mt-1">Passed Over</span>
+            <span className="text-[10px] text-muted mt-1">Archived Profiles</span>
           </div>
         </div>
       </div>
 
-      {/* Tab Switcher: Athlete Roster vs Recruited Athletes List */}
-      <div className="flex items-center justify-between border-b border-[var(--glass-border)] pb-2">
-        <div className="flex items-center gap-3">
+      {/* Categorized Tab Bar (Active Roster, Recruited, Shortlisted, Watchlist, Rejected) */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[var(--glass-border)] pb-3">
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0">
           <button
             onClick={() => setActiveTab('roster')}
-            className={`px-5 py-2.5 rounded-2xl text-xs font-bold transition-all ${
+            className={`px-4 py-2.5 rounded-2xl text-xs font-bold whitespace-nowrap transition-all ${
               activeTab === 'roster'
                 ? 'bg-primary text-black shadow-sm'
                 : 'glass-card text-muted hover:text-white'
             }`}
           >
-            🏃 Athlete Roster ({filteredAndSorted.length})
+            🏃 Active Roster ({participants.length - recruitmentMetrics.rejected})
           </button>
 
           <button
             onClick={() => setActiveTab('recruited')}
-            className={`px-5 py-2.5 rounded-2xl text-xs font-bold transition-all ${
+            className={`px-4 py-2.5 rounded-2xl text-xs font-bold whitespace-nowrap transition-all ${
               activeTab === 'recruited'
-                ? 'bg-primary text-black shadow-sm'
-                : 'glass-card text-muted hover:text-white'
+                ? 'bg-emerald-500 text-black shadow-sm font-black'
+                : 'glass-card text-emerald-400 hover:bg-emerald-500/10'
             }`}
           >
-            📋 Recruited Athletes List ({recruitedList.length})
+            🟢 Recruited ({recruitmentMetrics.recruited})
+          </button>
+
+          <button
+            onClick={() => setActiveTab('shortlisted')}
+            className={`px-4 py-2.5 rounded-2xl text-xs font-bold whitespace-nowrap transition-all ${
+              activeTab === 'shortlisted'
+                ? 'bg-cyan-500 text-black shadow-sm font-black'
+                : 'glass-card text-cyan-400 hover:bg-cyan-500/10'
+            }`}
+          >
+            ⭐ Shortlisted ({recruitmentMetrics.shortlisted})
+          </button>
+
+          <button
+            onClick={() => setActiveTab('watchlist')}
+            className={`px-4 py-2.5 rounded-2xl text-xs font-bold whitespace-nowrap transition-all ${
+              activeTab === 'watchlist'
+                ? 'bg-amber-500 text-black shadow-sm font-black'
+                : 'glass-card text-amber-400 hover:bg-amber-500/10'
+            }`}
+          >
+            🟡 Watchlist ({recruitmentMetrics.trialInvites + recruitmentMetrics.pendingReview})
+          </button>
+
+          <button
+            onClick={() => setActiveTab('rejected')}
+            className={`px-4 py-2.5 rounded-2xl text-xs font-bold whitespace-nowrap transition-all ${
+              activeTab === 'rejected'
+                ? 'bg-rose-500 text-black shadow-sm font-black'
+                : 'glass-card text-rose-400 hover:bg-rose-500/10'
+            }`}
+          >
+            🔴 Rejected ({recruitmentMetrics.rejected})
           </button>
         </div>
 
-        {activeTab === 'roster' && (
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-mono text-muted uppercase">Sort:</span>
+        {/* View Mode & Sorting Controls */}
+        <div className="flex items-center gap-3 self-end sm:self-auto">
+          {/* View Toggle (Cards vs Table) */}
+          <div className="flex items-center bg-surface p-1 rounded-xl border border-[var(--glass-border)]">
+            <button
+              onClick={() => setViewMode('cards')}
+              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-colors ${
+                viewMode === 'cards' ? 'bg-white text-black' : 'text-muted hover:text-white'
+              }`}
+            >
+              Cards 📇
+            </button>
+            <button
+              onClick={() => setViewMode('table')}
+              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-colors ${
+                viewMode === 'table' ? 'bg-white text-black' : 'text-muted hover:text-white'
+              }`}
+            >
+              Table 📋
+            </button>
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            <span className="text-[11px] font-mono text-muted uppercase">Sort:</span>
             {(
               [
                 { id: 'recent', label: 'Recent' },
@@ -601,9 +736,9 @@ export function ScoutDashboard() {
               <button
                 key={s.id}
                 onClick={() => setSortBy(s.id)}
-                className={`px-3 py-1 rounded-xl text-xs font-semibold transition-all ${
+                className={`px-2.5 py-1 rounded-xl text-xs font-semibold transition-all ${
                   sortBy === s.id
-                    ? 'bg-white text-black font-bold'
+                    ? 'bg-primary text-black font-bold'
                     : 'bg-surface text-muted hover:text-white border border-[var(--glass-border)]'
                 }`}
               >
@@ -611,53 +746,54 @@ export function ScoutDashboard() {
               </button>
             ))}
           </div>
-        )}
+        </div>
       </div>
 
-      {/* Requirement 3: Multi-Category Filters */}
-      {activeTab === 'roster' && (
-        <ScoutFilters filters={filters} onChange={setFilters} onReset={resetFilters} />
-      )}
+      {/* Multi-Category Filters */}
+      <ScoutFilters filters={filters} onChange={setFilters} onReset={resetFilters} />
 
-      {/* TAB 1: Athlete Roster Grid */}
-      {activeTab === 'roster' && (
-        loading ? (
-          <div className="glass-card text-center py-20 text-muted text-sm">
-            <span className="inline-block animate-spin mr-2">⚙️</span>
-            Loading roster analytics…
-          </div>
-        ) : filteredAndSorted.length === 0 ? (
-          <div className="glass-card text-center py-20 text-muted text-sm">
-            No athletes match your current search and filter parameters.
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {filteredAndSorted.map((athlete) => (
-              <AthleteCard
-                key={athlete.email}
-                athlete={athlete}
-                scoutEmail={user!.email}
-                scoutName={user?.name ?? 'Coach Priya'}
-                notesBySession={notesBySession}
-                onAddNote={(sessionId, note) => addNote(sessionId, user!.email, user!.name, note)}
-                onOpenPerformanceModal={setSelectedAthleteForModal}
-                onStatusChange={refresh}
-              />
-            ))}
-          </div>
-        )
-      )}
+      {/* Content Header */}
+      <div className="flex items-center justify-between">
+        <h3 className="text-lg font-bold text-white flex items-center gap-2">
+          <span>{getTabTitle()}</span>
+          <span className="text-xs font-mono px-2 py-0.5 rounded bg-surface border border-[var(--glass-border)] text-muted">
+            {filteredAndSorted.length} Athletes
+          </span>
+        </h3>
+      </div>
 
-      {/* Requirement 4: TAB 2: 📋 Recruited Athletes List Table */}
-      {activeTab === 'recruited' && (
+      {/* Loading & Empty States */}
+      {loading ? (
+        <div className="glass-card text-center py-20 text-muted text-sm">
+          <span className="inline-block animate-spin mr-2">⚙️</span>
+          Loading scouting telemetry…
+        </div>
+      ) : filteredAndSorted.length === 0 ? (
+        <div className="glass-card text-center py-20 text-muted text-sm space-y-2">
+          <p className="text-base font-bold text-white">No athletes in this category match your criteria.</p>
+          <p className="text-xs text-muted">
+            Try adjusting search terms or status filters.
+          </p>
+        </div>
+      ) : viewMode === 'cards' ? (
+        /* CARD VIEW */
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {filteredAndSorted.map((athlete) => (
+            <AthleteCard
+              key={athlete.email}
+              athlete={athlete}
+              scoutEmail={user!.email}
+              scoutName={user?.name ?? 'Coach Priya'}
+              notesBySession={notesBySession}
+              onAddNote={(sessionId, note) => addNote(sessionId, user!.email, user!.name, note)}
+              onOpenPerformanceModal={setSelectedAthleteForModal}
+              onStatusChange={refresh}
+            />
+          ))}
+        </div>
+      ) : (
+        /* SPREADSHEET TABLE VIEW */
         <div className="glass-card p-6 overflow-x-auto">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-bold text-lg text-white flex items-center gap-2">
-              <span>📋</span> Official Recruited & Shortlisted Roster
-            </h3>
-            <span className="text-xs text-muted font-mono">{recruitedList.length} Active Candidates</span>
-          </div>
-
           <table className="w-full text-left text-xs font-mono border-collapse">
             <thead>
               <tr className="border-b border-[var(--glass-border)] text-muted uppercase">
@@ -666,32 +802,81 @@ export function ScoutDashboard() {
                 <th className="py-3 px-3">Sport</th>
                 <th className="py-3 px-3">Position</th>
                 <th className="py-3 px-3">Scout Score</th>
-                <th className="py-3 px-3">Recruit Date</th>
-                <th className="py-3 px-3">Recruited By</th>
+                <th className="py-3 px-3">Sessions</th>
+                <th className="py-3 px-3">Avg Accuracy</th>
                 <th className="py-3 px-3">Status</th>
-                <th className="py-3 px-3">Contact Details</th>
+                <th className="py-3 px-3 text-right">Quick Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--glass-border)]">
-              {recruitedList.map((a) => (
+              {filteredAndSorted.map((a) => (
                 <tr key={a.email} className="hover:bg-surface/50 transition-colors">
-                  <td className="py-3.5 px-3 font-bold text-white font-sans">{a.name}</td>
+                  <td className="py-3.5 px-3 font-bold text-white font-sans flex items-center gap-2">
+                    <span>{a.name}</span>
+                    <button
+                      onClick={() => setSelectedAthleteForModal(a)}
+                      className="text-primary hover:underline text-[10px]"
+                    >
+                      📊
+                    </button>
+                  </td>
                   <td className="py-3.5 px-3 text-muted">{a.athleteId ?? 'ATH-1001'}</td>
                   <td className="py-3.5 px-3 text-primary">{a.sport ?? 'Football'}</td>
                   <td className="py-3.5 px-3 text-slate-300">{a.position ?? 'Midfielder'}</td>
                   <td className="py-3.5 px-3 font-bold text-amber-400">{a.scoutScore ?? 88}</td>
-                  <td className="py-3.5 px-3 text-muted">{a.recruitDate ?? '2026-07-30'}</td>
-                  <td className="py-3.5 px-3 text-slate-300">{a.recruitedBy ?? 'Coach Priya'}</td>
+                  <td className="py-3.5 px-3 text-white">{a.totalSessions}</td>
+                  <td className="py-3.5 px-3 font-bold text-emerald-400">{a.averageAccuracy}%</td>
                   <td className="py-3.5 px-3">
-                    <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold ${
-                      a.recruitmentStatus === 'Recruited'
-                        ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
-                        : 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/30'
-                    }`}>
-                      {a.recruitmentStatus}
+                    <span
+                      className={`px-2.5 py-1 rounded-full text-[10px] font-bold ${
+                        a.recruitmentStatus === 'Recruited'
+                          ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
+                          : a.recruitmentStatus === 'Shortlisted'
+                          ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/30'
+                          : a.recruitmentStatus === 'Rejected'
+                          ? 'bg-rose-500/10 text-rose-400 border border-rose-500/30'
+                          : a.recruitmentStatus === 'Trial Invited'
+                          ? 'bg-amber-500/10 text-amber-400 border border-amber-500/30'
+                          : 'bg-surface text-muted border border-[var(--glass-border)]'
+                      }`}
+                    >
+                      {a.recruitmentStatus ?? 'Pending'}
                     </span>
                   </td>
-                  <td className="py-3.5 px-3 text-slate-300">{a.contactDetails ?? a.email}</td>
+                  <td className="py-3.5 px-3 text-right">
+                    <div className="flex items-center justify-end gap-1.5">
+                      <button
+                        onClick={() => {
+                          updateAthleteStatus(a.email, 'Recruited', user?.name ?? 'Coach Priya');
+                          refresh();
+                        }}
+                        title="Recruit"
+                        className="px-2 py-1 rounded-lg bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 text-[10px] font-bold"
+                      >
+                        Recruit
+                      </button>
+                      <button
+                        onClick={() => {
+                          updateAthleteStatus(a.email, 'Shortlisted', user?.name ?? 'Coach Priya');
+                          refresh();
+                        }}
+                        title="Shortlist"
+                        className="px-2 py-1 rounded-lg bg-cyan-500/20 text-cyan-400 hover:bg-cyan-500/30 text-[10px] font-bold"
+                      >
+                        Shortlist
+                      </button>
+                      <button
+                        onClick={() => {
+                          updateAthleteStatus(a.email, 'Rejected', user?.name ?? 'Coach Priya');
+                          refresh();
+                        }}
+                        title="Reject"
+                        className="px-2 py-1 rounded-lg bg-rose-500/20 text-rose-400 hover:bg-rose-500/30 text-[10px] font-bold"
+                      >
+                        Reject
+                      </button>
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -699,7 +884,7 @@ export function ScoutDashboard() {
         </div>
       )}
 
-      {/* Requirement 3: Modal for Radar Chart of Skills & PB Tracker */}
+      {/* Radar Chart & Performance Detail Modal */}
       {selectedAthleteForModal && (
         <AthletePerformanceModal
           athlete={selectedAthleteForModal}

@@ -18,7 +18,6 @@ import { useVoiceFeedback } from '../hooks/useVoiceFeedback';
 import { getCoachFeedback } from '../logic/coachFeedback';
 import type { SessionResult } from '../models/sessionResult';
 import { WorkoutVisualAnalytics } from '../components/WorkoutVisualAnalytics';
-import { SocialFeaturesCard } from '../components/SocialFeaturesCard';
 import { DigitalTwinAthlete } from '../components/DigitalTwinAthlete';
 
 type AssessmentPhase = 'preview' | 'active' | 'summary';
@@ -301,11 +300,8 @@ export function AssessmentScreen() {
             session={savedSession}
           />
 
-          {/* 7 Visual Analytics Graphs & Confetti */}
+          {/* Visual Analytics Graphs & Muscle Heatmap */}
           <WorkoutVisualAnalytics session={savedSession} exerciseName={exercise.displayName} />
-
-          {/* Social Features Card */}
-          <SocialFeaturesCard session={savedSession} exerciseName={exercise.displayName} />
 
           <div className="flex gap-4 pt-4">
             <button
