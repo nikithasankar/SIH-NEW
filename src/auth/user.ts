@@ -5,8 +5,21 @@ export type RecruitmentStatus =
   | 'Trial Invited'
   | 'Shortlisted'
   | 'Under Review'
+  | 'Watchlist'
   | 'Rejected'
   | 'Pending';
+
+/**
+ * A single scout's independent decision about an athlete.
+ * Multiple scouts can each record their own decision; the athlete's
+ * visible status is *derived* from the collection of all scout decisions.
+ */
+export interface ScoutDecision {
+  scoutEmail: string;
+  scoutName: string;
+  decision: RecruitmentStatus;
+  decidedAt: string; // ISO 8601
+}
 
 export interface AthleteProfile {
   athleteId?: string;
@@ -42,6 +55,12 @@ export interface AthleteProfile {
   recruitDate?: string | null;
   recruitedBy?: string | null;
   contactDetails?: string;
+  /**
+   * Per-scout independent decisions. The athlete's displayed
+   * `recruitmentStatus` is derived from this array via
+   * `deriveAthleteStatus()` in localAuthStore.
+   */
+  scoutDecisions?: ScoutDecision[];
 }
 
 export interface OnFormUser extends AthleteProfile {

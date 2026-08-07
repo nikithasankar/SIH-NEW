@@ -34,7 +34,6 @@ export function AssessmentScreen() {
   const [cheatFlash, setCheatFlash] = useState(false);
   const [coachCue, setCoachCue] = useState<string | null>(null);
   const [savedSession, setSavedSession] = useState<SessionResult | null>(null);
-  const [savedSessionId, setSavedSessionId] = useState<number | null>(null);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const startTimeRef = useRef<number | null>(null);
@@ -148,7 +147,7 @@ export function AssessmentScreen() {
 
     try {
       const id = await saveSession(session);
-      setSavedSessionId(id);
+      setSavedSession({ ...session, id });
     } catch (err) {
       console.error('Failed to save session', err);
     }
@@ -157,7 +156,6 @@ export function AssessmentScreen() {
   const handleTryAgain = useCallback(() => {
     reset();
     setSavedSession(null);
-    setSavedSessionId(null);
     setPhase('preview');
   }, [reset]);
 

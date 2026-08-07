@@ -10,8 +10,8 @@
 // component-facing API stays the same.
 import { useCallback, useEffect, useState } from 'react';
 import type { SessionResult, ScoutNote } from '../models/sessionResult';
-import { listParticipants } from '../auth/localAuthStore';
-import type { PublicUser } from '../auth/user';
+import { listParticipants, getScoutDecisionForAthlete } from '../auth/localAuthStore';
+import type { PublicUser, ScoutDecision } from '../auth/user';
 import {
   getSessionsByUser,
   addScoutNote,
@@ -25,9 +25,11 @@ export interface ParticipantSummary extends PublicUser {
   totalSessions: number;
   averageAccuracy: number;
   lastActive: string | null;
+  /** This scout's personal decision for this athlete (undefined = not reviewed yet). */
+  myDecision?: ScoutDecision;
 }
 
-export function useScoutData() {
+export function useScoutData(currentScoutEmail?: string) {
   const [participants, setParticipants] = useState<ParticipantSummary[]>([]);
   const [notesBySession, setNotesBySession] = useState<Record<number, ScoutNote[]>>({});
   const [loading, setLoading] = useState(true);
@@ -46,7 +48,10 @@ export function useScoutData() {
               ? Math.round(sessions.reduce((sum, s) => sum + s.accuracy, 0) / totalSessions)
               : 0;
           const lastActive = sessions[0]?.timestamp ?? null;
-          return { ...u, sessions, totalReps, totalSessions, averageAccuracy, lastActive };
+          const myDecision = currentScoutEmail
+            ? getScoutDecisionForAthlete(u.email, currentScoutEmail)
+            : undefined;
+          return { ...u, sessions, totalReps, totalSessions, averageAccuracy, lastActive, myDecision };
         })
       );
       // Most recently active athletes first.

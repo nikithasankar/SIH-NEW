@@ -31,8 +31,8 @@ const FEATURES: FeatureCardProps[] = [
     body: 'The ONFORM AI Coach speaks exercise-specific cues so you can focus on form, not the screen.',
   },
   {
-    title: 'Fitness Passport',
-    body: 'Every session generates a QR-verified passport that scouts and coaches can scan and trust.',
+    title: 'Biomechanical Telemetry',
+    body: 'Every session generates certified kinematic telemetry that scouts and coaches can review and trust.',
   },
   {
     title: 'Scout Dashboard',
@@ -59,8 +59,8 @@ const STEPS = [
   },
   {
     n: '03',
-    title: 'Get your passport',
-    body: 'Finish your set and receive a QR-coded card scouts can verify instantly.',
+    title: 'Certified Performance',
+    body: 'Finish your set and receive a certified breakdown scouts can evaluate instantly.',
     image: plankImg,
   },
 ];
@@ -213,7 +213,7 @@ export const LandingPage: React.FC = () => {
             </h1>
             <p className="mt-6 max-w-xl text-base text-muted sm:text-lg">
               ONFORM turns any camera into a certified assessment station. Real
-              rep counting, instant cheat detection, and a passport scouts
+              rep counting, instant cheat detection, and biomechanical telemetry scouts
               actually trust.
             </p>
             <div className="mt-10 sm:mt-12 flex flex-col sm:flex-row gap-4">
@@ -247,8 +247,8 @@ export const LandingPage: React.FC = () => {
               <div className="text-[10px] sm:text-xs text-muted font-medium mt-1 uppercase tracking-wider">Client-side privacy</div>
             </div>
             <div className="glass-card p-5 text-center flex flex-col justify-center">
-              <div className="text-2xl sm:text-3xl font-extrabold text-primary">QR Pass</div>
-              <div className="text-[10px] sm:text-xs text-muted font-medium mt-1 uppercase tracking-wider">Verified scouting card</div>
+              <div className="text-2xl sm:text-3xl font-extrabold text-primary">Zero Cloud</div>
+              <div className="text-[10px] sm:text-xs text-muted font-medium mt-1 uppercase tracking-wider">Edge Biomechanics</div>
             </div>
           </div>
         </div>
@@ -400,7 +400,7 @@ export const LandingPage: React.FC = () => {
                 'Centralized athlete roster with live session updates',
                 'Side-by-side accuracy and form-break metrics',
                 'Coaching feedback attached to workout sessions',
-                'QR passport scanning for instant verification',
+                'Biomechanical telemetry for instant talent verification',
               ].map((point) => (
                 <li key={point} className="flex items-start gap-3 text-sm text-slate-200">
                   <span className="text-primary font-bold shrink-0">✓</span>

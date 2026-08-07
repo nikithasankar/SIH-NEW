@@ -26,7 +26,7 @@ export function HistoryScreen() {
             <SessionListTile
               key={session.id}
               session={session}
-              onClick={() => session.id != null && navigate(`/app/passport/${session.id}`)}
+              onClick={() => session.id != null && navigate(`/app/session/${session.id}`)}
             />
           ))}
         </div>

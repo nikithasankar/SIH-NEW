@@ -188,7 +188,7 @@ export const HomeDashboard: React.FC = () => {
           </div>
           <h3 className="text-xl sm:text-2xl font-bold text-white">Standard Push-Up & Squat Calibration</h3>
           <p className="text-muted text-sm leading-relaxed">
-            Test full depth with real-time audio corrections from ONFORM AI Coach. Capture your benchmark score to update your QR Passport.
+            Test full depth with real-time audio corrections from ONFORM AI Coach. Capture your benchmark score to update your verified AI scout profile.
           </p>
         </div>
         <button
