@@ -1,9 +1,9 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import confetti from 'canvas-confetti';
 import { useAuth } from '../auth/AuthContext';
-import { findUser, getSession } from '../auth/localAuthStore';
+import { findUser, getSession, listScoutDecisions } from '../auth/localAuthStore';
 import { getSessionsByUser, getNotesForSession } from '../data/sessionRepository';
-import type { RecruitmentStatus } from '../auth/user';
+import type { RecruitmentStatus, ScoutDecision } from '../auth/user';
 import type { ScoutNote } from '../models/sessionResult';
 
 export const AthleteStatusScreen: React.FC = () => {
@@ -14,6 +14,7 @@ export const AthleteStatusScreen: React.FC = () => {
     by?: string | null;
     scoutScore?: number;
   }>({});
+  const [scoutDecisions, setScoutDecisions] = useState<ScoutDecision[]>([]);
   const [athleteNotes, setAthleteNotes] = useState<ScoutNote[]>([]);
   const lastStatusRef = useRef<string>('');
 
@@ -28,9 +29,13 @@ export const AthleteStatusScreen: React.FC = () => {
       setCurrentStatus(st);
       setRecruitmentDetails({
         date: latestUser.recruitDate,
-        by: latestUser.recruitingScout || latestUser.recruitedBy || 'Coach Priya',
+        by: latestUser.recruitedBy || 'Coach Priya',
         scoutScore: latestUser.scoutScore || 88,
       });
+
+      // Load all independent scout decisions
+      const decisions = latestUser.scoutDecisions || listScoutDecisions(user.email);
+      setScoutDecisions(decisions);
 
       // Trigger celebratory confetti when transitioning to Recruited
       if (st === 'Recruited' && lastStatusRef.current !== 'Recruited') {
@@ -228,7 +233,30 @@ export const AthleteStatusScreen: React.FC = () => {
           </div>
         )}
 
-        {/* 🔴 REJECTED */}
+        {/* 🟡 WATCHLIST */}
+        {currentStatus === 'Watchlist' && (
+          <div className="bg-amber-500/10 border-2 border-amber-500 p-6 sm:p-8 rounded-3xl flex flex-col sm:flex-row items-center justify-between gap-6 shadow-[0_0_20px_rgba(245,158,11,0.15)]">
+            <div className="space-y-2 text-center sm:text-left">
+              <div className="flex items-center justify-center sm:justify-start gap-3">
+                <span className="text-3xl">🟡</span>
+                <h2 className="text-2xl sm:text-3xl font-black text-amber-400">
+                  On Scout Watchlist & Talent Radar
+                </h2>
+              </div>
+              <p className="text-sm text-slate-200 leading-relaxed max-w-xl">
+                You are currently placed on the <strong className="text-white">Active Scout Watchlist</strong>. Other scouting directors are reviewing your telemetry logs and biomechanical consistency to provide recruitment assistance.
+              </p>
+              <div className="text-xs font-mono text-amber-300 pt-1">
+                Status: Candidate Watchlist · Multiple Scouts Evaluating
+              </div>
+            </div>
+            <span className="px-4 py-2 rounded-xl bg-amber-400 text-black font-bold text-xs font-mono shrink-0">
+              Watchlist Candidate 🟡
+            </span>
+          </div>
+        )}
+
+        {/* 🔴 REJECTED (Only when ALL scouts reject) */}
         {currentStatus === 'Rejected' && (
           <div className="bg-rose-500/10 border-2 border-rose-500 p-6 sm:p-8 rounded-3xl flex flex-col sm:flex-row items-center justify-between gap-6">
             <div className="space-y-2 text-center sm:text-left">
@@ -239,10 +267,10 @@ export const AthleteStatusScreen: React.FC = () => {
                 </h2>
               </div>
               <p className="text-sm text-slate-200 leading-relaxed max-w-xl">
-                Your profile was not selected for recruitment in this current cycle. Continue training with ONFORM AI Coach to improve your form accuracy and re-apply in the next scouting window.
+                All evaluating scouting directors have concluded their review for this cycle. Continue training with ONFORM AI Coach to improve your form accuracy and re-apply in the next scouting window.
               </p>
               <div className="text-xs font-mono text-rose-300 pt-1">
-                Status: Archived for Current Seasonal Window
+                Status: Archived by All Reviewing Scouts
               </div>
             </div>
             <span className="px-4 py-2 rounded-xl bg-rose-400 text-black font-bold text-xs font-mono shrink-0">
@@ -271,6 +299,75 @@ export const AthleteStatusScreen: React.FC = () => {
             <span className="px-4 py-2 rounded-xl bg-surface border border-[var(--glass-border)] text-muted font-bold text-xs font-mono shrink-0">
               Pending Telemetry
             </span>
+          </div>
+        )}
+      </div>
+
+      {/* Multi-Scout Decision Breakdown Panel */}
+      <div className="glass-card p-6 border border-primary/30 rounded-2xl bg-[#10131b]">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <span className="text-xl">🧭</span>
+            <div>
+              <h3 className="font-extrabold text-base text-white">Scout Review & Decision Breakdown</h3>
+              <p className="text-xs text-muted">Independent evaluations recorded by scouting directors</p>
+            </div>
+          </div>
+          <span className="text-xs font-mono font-bold px-3 py-1 rounded-xl bg-primary/10 text-primary border border-primary/20">
+            {scoutDecisions.length} {scoutDecisions.length === 1 ? 'Scout Review' : 'Scout Reviews'}
+          </span>
+        </div>
+
+        {scoutDecisions.length === 0 ? (
+          <div className="bg-surface/50 p-4 rounded-xl border border-[var(--glass-border)] text-center">
+            <p className="text-xs text-slate-300">
+              No individual scout decisions recorded yet.
+            </p>
+            <p className="text-[11px] text-muted mt-1">
+              As national scouts review your profile, their individual evaluations and recruitment decisions will be listed here.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-2.5">
+            {scoutDecisions.map((d, i) => (
+              <div
+                key={i}
+                className="flex items-center justify-between p-3.5 rounded-xl bg-[var(--color-background)] border border-[var(--glass-border)] hover:border-primary/30 transition-colors"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-xl bg-surface border border-[var(--glass-border)] flex items-center justify-center text-xs font-bold text-primary">
+                    {d.scoutName[0] ?? 'S'}
+                  </div>
+                  <div>
+                    <span className="text-xs font-bold text-white block">{d.scoutName}</span>
+                    <span className="text-[10px] font-mono text-muted">{d.scoutEmail}</span>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <span
+                    className={`text-[11px] font-mono px-3 py-1 rounded-full border font-bold ${
+                      d.decision === 'Recruited'
+                        ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                        : d.decision === 'Shortlisted'
+                        ? 'bg-cyan-500/10 text-cyan-400 border-cyan-500/30'
+                        : d.decision === 'Trial Invited'
+                        ? 'bg-amber-500/10 text-amber-400 border-amber-500/30'
+                        : d.decision === 'Under Review'
+                        ? 'bg-orange-500/10 text-orange-400 border-orange-500/30'
+                        : d.decision === 'Rejected'
+                        ? 'bg-rose-500/10 text-rose-400 border-rose-500/30'
+                        : 'bg-surface text-muted border-[var(--glass-border)]'
+                    }`}
+                  >
+                    {d.decision === 'Recruited' ? '✅ Recruited' : d.decision === 'Shortlisted' ? '⭐ Shortlisted' : d.decision === 'Rejected' ? '❌ Rejected' : d.decision}
+                  </span>
+                  <span className="text-[10px] font-mono text-muted hidden sm:inline-block">
+                    {new Date(d.decidedAt).toLocaleDateString()}
+                  </span>
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </div>

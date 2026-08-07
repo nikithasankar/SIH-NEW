@@ -1,5 +1,5 @@
 // Summary card — shows the result of a completed (or past) session.
-// Used at the end of an assessment and on the Passport screen.
+// Used at the end of an assessment and on the Session Breakdown screen.
 import type { SessionResult } from '../models/sessionResult';
 
 interface SummaryCardProps {

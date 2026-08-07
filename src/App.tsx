@@ -10,7 +10,7 @@ import { ParticipantLayout } from './screens/ParticipantLayout';
 import { HomeDashboard } from './screens/HomeDashboard';
 import { ExercisePicker } from './screens/ExercisePicker';
 import { AssessmentScreen } from './screens/AssessmentScreen';
-import { PassportScreen } from './screens/PassportScreen';
+import { SessionDetailScreen } from './screens/SessionDetailScreen';
 import { HistoryScreen } from './screens/HistoryScreen';
 import { ProgressScreen } from './screens/ProgressScreen';
 import { ProfileScreen } from './screens/ProfileScreen';
@@ -41,7 +41,8 @@ export default function App() {
                 <Route path="exercises" element={<ExercisePicker />} />
                 <Route path="assess/:exerciseId" element={<AssessmentScreen />} />
                 <Route path="status" element={<AthleteStatusScreen />} />
-                <Route path="passport/:sessionId" element={<PassportScreen />} />
+                <Route path="session/:sessionId" element={<SessionDetailScreen />} />
+                <Route path="passport/:sessionId" element={<SessionDetailScreen />} />
                 <Route path="history" element={<HistoryScreen />} />
                 <Route path="progress" element={<ProgressScreen />} />
                 <Route path="profile" element={<ProfileScreen />} />

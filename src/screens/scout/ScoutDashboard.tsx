@@ -205,9 +205,16 @@ function AthleteCard({
       : 'bg-surface text-muted border-[var(--glass-border)]';
 
   const handleRecruitAction = (newStatus: RecruitmentStatus) => {
-    updateAthleteStatus(athlete.email, newStatus, scoutName);
+    updateAthleteStatus(athlete.email, newStatus, scoutName, scoutEmail);
     onStatusChange();
   };
+
+  // This scout's personal decision for this athlete
+  const myDecision = athlete.myDecision;
+  const myDecisionLabel = myDecision?.decision ?? 'Not Reviewed';
+
+  // All scout decisions for multi-scout display
+  const allDecisions = athlete.scoutDecisions ?? [];
 
   return (
     <div className="glass-card p-6 flex flex-col justify-between hover:border-[var(--color-primary)]/40 transition-all duration-200">
@@ -242,6 +249,25 @@ function AthleteCard({
           <span className={`text-[11px] font-mono px-3 py-1 rounded-full border font-bold ${statusColor}`}>
             {status}
           </span>
+        </div>
+
+        {/* Per-scout decision indicator */}
+        <div className="flex items-center gap-2 mb-4 px-1">
+          <span className="text-[10px] font-mono text-muted">Your Decision:</span>
+          <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border ${
+            myDecisionLabel === 'Recruited' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+            : myDecisionLabel === 'Shortlisted' ? 'bg-cyan-500/10 text-cyan-400 border-cyan-500/30'
+            : myDecisionLabel === 'Trial Invited' ? 'bg-amber-500/10 text-amber-400 border-amber-500/30'
+            : myDecisionLabel === 'Rejected' ? 'bg-rose-500/10 text-rose-400 border-rose-500/30'
+            : 'bg-surface text-muted border-[var(--glass-border)]'
+          }`}>
+            {myDecisionLabel === 'Not Reviewed' ? '⏳ Not Reviewed' : myDecisionLabel}
+          </span>
+          {allDecisions.length > 0 && (
+            <span className="text-[10px] font-mono text-muted">
+              · {allDecisions.length} scout{allDecisions.length !== 1 ? 's' : ''} reviewed
+            </span>
+          )}
         </div>
 
         {/* Athlete Stats & Performance Modal Trigger */}
@@ -315,7 +341,7 @@ function AthleteCard({
           <button
             onClick={() => handleRecruitAction('Recruited')}
             className={`py-2 px-2 rounded-xl text-xs font-bold transition-all border ${
-              status === 'Recruited'
+              myDecisionLabel === 'Recruited'
                 ? 'bg-emerald-500 text-black border-emerald-500 shadow-sm'
                 : 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
             }`}
@@ -326,7 +352,7 @@ function AthleteCard({
           <button
             onClick={() => handleRecruitAction('Shortlisted')}
             className={`py-2 px-2 rounded-xl text-xs font-bold transition-all border ${
-              status === 'Shortlisted'
+              myDecisionLabel === 'Shortlisted'
                 ? 'bg-cyan-500 text-black border-cyan-500 shadow-sm'
                 : 'bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 border-cyan-500/30'
             }`}
@@ -337,7 +363,7 @@ function AthleteCard({
           <button
             onClick={() => handleRecruitAction('Trial Invited')}
             className={`py-2 px-2 rounded-xl text-xs font-bold transition-all border ${
-              status === 'Trial Invited'
+              myDecisionLabel === 'Trial Invited'
                 ? 'bg-amber-500 text-black border-amber-500 shadow-sm'
                 : 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border-amber-500/30'
             }`}
@@ -348,7 +374,7 @@ function AthleteCard({
           <button
             onClick={() => handleRecruitAction('Rejected')}
             className={`py-2 px-2 rounded-xl text-xs font-bold transition-all border ${
-              status === 'Rejected'
+              myDecisionLabel === 'Rejected'
                 ? 'bg-rose-500 text-black border-rose-500 shadow-sm'
                 : 'bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border-rose-500/30'
             }`}
@@ -356,6 +382,32 @@ function AthleteCard({
             ❌ Reject
           </button>
         </div>
+
+        {/* Other scouts' decisions */}
+        {allDecisions.length > 0 && (
+          <div className="mt-3 pt-3 border-t border-[var(--glass-border)]">
+            <span className="text-[10px] font-mono font-bold uppercase text-muted tracking-wider block mb-2">
+              🧭 All Scout Decisions
+            </span>
+            <div className="flex flex-wrap gap-2">
+              {allDecisions.map((d) => (
+                <div
+                  key={d.scoutEmail}
+                  className={`text-[10px] font-mono px-2.5 py-1 rounded-lg border flex items-center gap-1.5 ${
+                    d.decision === 'Recruited' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                    : d.decision === 'Shortlisted' ? 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20'
+                    : d.decision === 'Rejected' ? 'bg-rose-500/10 text-rose-400 border-rose-500/20'
+                    : 'bg-surface text-muted border-[var(--glass-border)]'
+                  }`}
+                >
+                  <span className="font-bold">{d.scoutName}</span>
+                  <span>→</span>
+                  <span>{d.decision}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -363,7 +415,7 @@ function AthleteCard({
 
 export function ScoutDashboard() {
   const { user, logout } = useAuth();
-  const { participants, notesBySession, loading, addNote, refresh } = useScoutData();
+  const { participants, notesBySession, loading, addNote, refresh } = useScoutData(user?.email);
   const [activeTab, setActiveTab] = useState<ScoutTab>('roster');
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
   const [selectedAthleteForModal, setSelectedAthleteForModal] = useState<ParticipantSummary | null>(null);
@@ -390,52 +442,73 @@ export function ScoutDashboard() {
 
   const [sortBy, setSortBy] = useState<'recent' | 'sessions' | 'accuracy' | 'score'>('recent');
 
-  // Metrics summary counts across all statuses
+  // Metrics summary: Active Roster is global unrecruited/unrejected pool; other metrics are scoped to THIS scout
   const recruitmentMetrics = useMemo(() => {
-    let shortlisted = 0;
-    let recruited = 0;
-    let pendingReview = 0;
-    let trialInvites = 0;
-    let rejected = 0;
+    let activeRosterCount = 0;
+    let myShortlisted = 0;
+    let myRecruited = 0;
+    let myWatchlist = 0;
+    let myRejected = 0;
 
     participants.forEach((p) => {
-      const st = p.recruitmentStatus || 'Pending';
-      if (st === 'Shortlisted') shortlisted++;
-      else if (st === 'Recruited') recruited++;
-      else if (st === 'Trial Invited') trialInvites++;
-      else if (st === 'Under Review' || st === 'Pending') pendingReview++;
-      else if (st === 'Rejected') rejected++;
+      const hasRecruitedByAny = p.scoutDecisions?.some((d) => d.decision === 'Recruited') ?? false;
+      const hasRejectedByAny = p.scoutDecisions?.some((d) => d.decision === 'Rejected') ?? false;
+
+      // Active Roster: NOT marked as Recruited or Rejected by ANY scout
+      if (!hasRecruitedByAny && !hasRejectedByAny) {
+        activeRosterCount++;
+      }
+
+      // Personal scoped metrics for logged-in scout
+      const myDec = p.myDecision?.decision;
+      if (myDec === 'Recruited') {
+        myRecruited++;
+      } else if (myDec === 'Shortlisted') {
+        myShortlisted++;
+      } else if (myDec === 'Watchlist' || myDec === 'Trial Invited' || myDec === 'Under Review') {
+        myWatchlist++;
+      } else if (myDec === 'Rejected') {
+        myRejected++;
+      }
     });
 
     return {
-      total: participants.length,
-      shortlisted,
-      recruited,
-      pendingReview,
-      trialInvites,
-      rejected,
+      activeRoster: activeRosterCount,
+      recruited: myRecruited,
+      shortlisted: myShortlisted,
+      watchlist: myWatchlist,
+      rejected: myRejected,
     };
   }, [participants]);
 
-  // Tab Filtering: Filter athletes according to the selected ScoutTab
+  // Tab Filtering:
+  // 1. 'roster' (Global Pool) => athletes NOT recruited or rejected by ANY scout
+  // 2. 'recruited', 'shortlisted', 'watchlist', 'rejected' => ONLY athletes personally assigned by logged-in scout
   const athletesInCurrentTab = useMemo(() => {
     return participants.filter((p) => {
-      const st = p.recruitmentStatus || 'Pending';
+      const hasRecruitedByAny = p.scoutDecisions?.some((d) => d.decision === 'Recruited') ?? false;
+      const hasRejectedByAny = p.scoutDecisions?.some((d) => d.decision === 'Rejected') ?? false;
+      const myDec = p.myDecision?.decision;
+
       if (activeTab === 'roster') {
-        // Active Roster shows all non-rejected athletes (or pending/under review)
-        return st !== 'Rejected';
+        // Global Pool: show all athletes not recruited or rejected by any scout
+        return !hasRecruitedByAny && !hasRejectedByAny;
       }
       if (activeTab === 'recruited') {
-        return st === 'Recruited';
+        // Strictly scoped to current scout
+        return myDec === 'Recruited';
       }
       if (activeTab === 'shortlisted') {
-        return st === 'Shortlisted';
+        // Strictly scoped to current scout
+        return myDec === 'Shortlisted';
       }
       if (activeTab === 'watchlist') {
-        return st === 'Trial Invited' || st === 'Under Review';
+        // Strictly scoped to current scout
+        return myDec === 'Watchlist' || myDec === 'Trial Invited' || myDec === 'Under Review';
       }
       if (activeTab === 'rejected') {
-        return st === 'Rejected';
+        // Strictly scoped to current scout
+        return myDec === 'Rejected';
       }
       return true;
     });
@@ -590,7 +663,7 @@ export function ScoutDashboard() {
           >
             <span className="text-[10px] font-mono font-semibold text-muted uppercase">Active Roster</span>
             <div className="text-2xl sm:text-3xl font-black text-white mt-1">
-              {participants.length - recruitmentMetrics.rejected}
+              {recruitmentMetrics.activeRoster}
             </div>
             <span className="text-[10px] text-muted mt-1">Candidate Pool</span>
           </div>
@@ -625,7 +698,7 @@ export function ScoutDashboard() {
           >
             <span className="text-[10px] font-mono font-semibold text-amber-400 uppercase">Watchlist / Trials 🟡</span>
             <div className="text-2xl sm:text-3xl font-black text-amber-400 mt-1">
-              {recruitmentMetrics.trialInvites + recruitmentMetrics.pendingReview}
+              {recruitmentMetrics.watchlist}
             </div>
             <span className="text-[10px] text-muted mt-1">Under Evaluation</span>
           </div>
@@ -654,7 +727,7 @@ export function ScoutDashboard() {
                 : 'glass-card text-muted hover:text-white'
             }`}
           >
-            🏃 Active Roster ({participants.length - recruitmentMetrics.rejected})
+            🏃 Active Roster ({recruitmentMetrics.activeRoster})
           </button>
 
           <button
@@ -687,7 +760,7 @@ export function ScoutDashboard() {
                 : 'glass-card text-amber-400 hover:bg-amber-500/10'
             }`}
           >
-            🟡 Watchlist ({recruitmentMetrics.trialInvites + recruitmentMetrics.pendingReview})
+            🟡 Watchlist ({recruitmentMetrics.watchlist})
           </button>
 
           <button
@@ -835,7 +908,7 @@ export function ScoutDashboard() {
                           ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/30'
                           : a.recruitmentStatus === 'Rejected'
                           ? 'bg-rose-500/10 text-rose-400 border border-rose-500/30'
-                          : a.recruitmentStatus === 'Trial Invited'
+                          : a.recruitmentStatus === 'Trial Invited' || a.recruitmentStatus === 'Watchlist'
                           ? 'bg-amber-500/10 text-amber-400 border border-amber-500/30'
                           : 'bg-surface text-muted border border-[var(--glass-border)]'
                       }`}
@@ -847,7 +920,7 @@ export function ScoutDashboard() {
                     <div className="flex items-center justify-end gap-1.5">
                       <button
                         onClick={() => {
-                          updateAthleteStatus(a.email, 'Recruited', user?.name ?? 'Coach Priya');
+                          updateAthleteStatus(a.email, 'Recruited', user?.name ?? 'Coach Priya', user?.email ?? 'scout@onform.app');
                           refresh();
                         }}
                         title="Recruit"
@@ -857,7 +930,7 @@ export function ScoutDashboard() {
                       </button>
                       <button
                         onClick={() => {
-                          updateAthleteStatus(a.email, 'Shortlisted', user?.name ?? 'Coach Priya');
+                          updateAthleteStatus(a.email, 'Shortlisted', user?.name ?? 'Coach Priya', user?.email ?? 'scout@onform.app');
                           refresh();
                         }}
                         title="Shortlist"
@@ -867,7 +940,7 @@ export function ScoutDashboard() {
                       </button>
                       <button
                         onClick={() => {
-                          updateAthleteStatus(a.email, 'Rejected', user?.name ?? 'Coach Priya');
+                          updateAthleteStatus(a.email, 'Rejected', user?.name ?? 'Coach Priya', user?.email ?? 'scout@onform.app');
                           refresh();
                         }}
                         title="Reject"

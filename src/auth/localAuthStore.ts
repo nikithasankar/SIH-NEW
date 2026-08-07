@@ -1,4 +1,4 @@
-import type { OnFormUser, PublicUser, UserRole, RecruitmentStatus, toPublicUser as convertToPublic } from './user';
+import type { OnFormUser, PublicUser, UserRole, RecruitmentStatus, ScoutDecision } from './user';
 
 const USERS_KEY = 'onform_users_v1';
 const SESSION_KEY = 'onform_session_v1';
@@ -240,45 +240,182 @@ export function listParticipants(): PublicUser[] {
     });
 }
 
+/**
+ * Priority order for deriving the athlete's overall visible status from
+ * the collection of independent scout decisions. Lower index = higher priority.
+ */
+const STATUS_PRIORITY: RecruitmentStatus[] = [
+  'Recruited',
+  'Shortlisted',
+  'Trial Invited',
+  'Under Review',
+];
+
+/**
+ * Derive a single athlete-visible status from the set of all scout decisions.
+ *
+ * Rules:
+ *  1. If ANY scout gave a positive decision (Recruited/Shortlisted/Trial Invited/Under Review),
+ *     use the highest-priority positive decision.
+ *  2. If ALL scouts rejected → 'Rejected'.
+ *  3. If SOME scouts rejected but at least one hasn't decided (or no positive) → 'Watchlist'.
+ *  4. If no decisions at all → 'Pending'.
+ *
+ * Returns { status, bestScoutName, bestScoutEmail } so the athlete knows who selected them.
+ */
+export function deriveAthleteStatus(decisions: ScoutDecision[]): {
+  status: RecruitmentStatus;
+  bestScoutName: string | null;
+  bestScoutEmail: string | null;
+} {
+  if (!decisions || decisions.length === 0) {
+    return { status: 'Pending', bestScoutName: null, bestScoutEmail: null };
+  }
+
+  // Find the highest-priority positive decision
+  let bestDecision: ScoutDecision | null = null;
+  let bestPriority = STATUS_PRIORITY.length; // worst
+
+  let allRejected = true;
+  let hasReject = false;
+
+  for (const d of decisions) {
+    if (d.decision === 'Rejected') {
+      hasReject = true;
+      continue;
+    }
+    // Any non-rejected decision means not all are rejected
+    allRejected = false;
+
+    const idx = STATUS_PRIORITY.indexOf(d.decision);
+    if (idx !== -1 && idx < bestPriority) {
+      bestPriority = idx;
+      bestDecision = d;
+    }
+  }
+
+  if (bestDecision) {
+    return {
+      status: bestDecision.decision,
+      bestScoutName: bestDecision.scoutName,
+      bestScoutEmail: bestDecision.scoutEmail,
+    };
+  }
+
+  if (allRejected) {
+    return { status: 'Rejected', bestScoutName: null, bestScoutEmail: null };
+  }
+
+  // Some scouts rejected but no positive decisions yet → Watchlist
+  if (hasReject) {
+    return { status: 'Watchlist', bestScoutName: null, bestScoutEmail: null };
+  }
+
+  return { status: 'Pending', bestScoutName: null, bestScoutEmail: null };
+}
+
+/**
+ * Record (or update) a single scout's decision for an athlete.
+ * The athlete's overall visible `recruitmentStatus` is then re-derived
+ * from the full set of scout decisions.
+ */
 export function updateAthleteStatus(
   email: string,
   status: RecruitmentStatus,
-  scoutName: string = 'Coach Priya'
+  scoutName: string = 'Coach Priya',
+  scoutEmail: string = 'scout@onform.app'
 ): OnFormUser | undefined {
   const users = readUsers();
   const normalized = email.trim().toLowerCase();
   const index = users.findIndex((u) => u.email.toLowerCase() === normalized);
-  if (index !== -1) {
-    users[index].recruitmentStatus = status;
-    users[index].recruitDate = new Date().toISOString().split('T')[0];
-    users[index].recruitingScout = scoutName;
-    users[index].recruitedBy = scoutName;
-    writeUsers(users);
+  if (index === -1) return undefined;
 
-    // If current logged in session matches this athlete, update session too
-    const currentSession = getSession();
-    if (currentSession && currentSession.email.toLowerCase() === normalized) {
-      setSession({
-        ...currentSession,
-        recruitmentStatus: status,
-        recruitDate: users[index].recruitDate,
-        recruitedBy: scoutName,
-      });
-    }
+  const athlete = users[index];
 
-    try {
-      window.dispatchEvent(
-        new CustomEvent('athlete_status_updated', {
-          detail: { email: normalized, status, scoutName, recruitDate: users[index].recruitDate },
-        })
-      );
-    } catch {
-      // ignore in non-browser context
-    }
-
-    return users[index];
+  // Initialize scoutDecisions array if missing
+  if (!athlete.scoutDecisions) {
+    athlete.scoutDecisions = [];
   }
-  return undefined;
+
+  // Find existing decision by this scout, or create new
+  const existingIdx = athlete.scoutDecisions.findIndex(
+    (d) => d.scoutEmail.toLowerCase() === scoutEmail.toLowerCase()
+  );
+
+  const decision: ScoutDecision = {
+    scoutEmail,
+    scoutName,
+    decision: status,
+    decidedAt: new Date().toISOString(),
+  };
+
+  if (existingIdx !== -1) {
+    athlete.scoutDecisions[existingIdx] = decision;
+  } else {
+    athlete.scoutDecisions.push(decision);
+  }
+
+  // Re-derive the overall status from all scout decisions
+  const derived = deriveAthleteStatus(athlete.scoutDecisions);
+  athlete.recruitmentStatus = derived.status;
+  athlete.recruitDate = new Date().toISOString().split('T')[0];
+  athlete.recruitedBy = derived.bestScoutName;
+
+  writeUsers(users);
+
+  // If current logged-in session matches this athlete, update session too
+  const currentSession = getSession();
+  if (currentSession && currentSession.email.toLowerCase() === normalized) {
+    setSession({
+      ...currentSession,
+      recruitmentStatus: derived.status,
+      recruitDate: athlete.recruitDate,
+      recruitedBy: derived.bestScoutName,
+      scoutDecisions: athlete.scoutDecisions,
+    });
+  }
+
+  try {
+    window.dispatchEvent(
+      new CustomEvent('athlete_status_updated', {
+        detail: {
+          email: normalized,
+          status: derived.status,
+          scoutName,
+          scoutEmail,
+          recruitDate: athlete.recruitDate,
+          decisions: athlete.scoutDecisions,
+        },
+      })
+    );
+  } catch {
+    // ignore in non-browser context
+  }
+
+  return athlete;
+}
+
+/**
+ * Get a specific scout's decision for a specific athlete.
+ * Returns undefined if the scout hasn't decided yet.
+ */
+export function getScoutDecisionForAthlete(
+  athleteEmail: string,
+  scoutEmail: string
+): ScoutDecision | undefined {
+  const user = findUser(athleteEmail);
+  if (!user?.scoutDecisions) return undefined;
+  return user.scoutDecisions.find(
+    (d) => d.scoutEmail.toLowerCase() === scoutEmail.toLowerCase()
+  );
+}
+
+/**
+ * Get all scout decisions for a given athlete.
+ */
+export function listScoutDecisions(athleteEmail: string): ScoutDecision[] {
+  const user = findUser(athleteEmail);
+  return user?.scoutDecisions ?? [];
 }
 
 export function getSession(): PublicUser | null {
