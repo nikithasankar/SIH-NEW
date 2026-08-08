@@ -26,7 +26,13 @@ interface AuthContextValue {
    * participant can't accidentally sign in through the scout tab (and
    * vice versa) — this is the "role/email based" login the coach requested. */
   login: (email: string, password: string, role: UserRole) => { ok: true } | { ok: false; error: string };
-  signup: (name: string, email: string, password: string, role: UserRole) => { ok: true } | { ok: false; error: string };
+  signup: (
+    name: string,
+    email: string,
+    password: string,
+    role: UserRole,
+    profileData?: Partial<PublicUser>
+  ) => { ok: true } | { ok: false; error: string };
   logout: () => void;
 }
 
@@ -53,26 +59,46 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         error: `This account is registered as a ${account.role}. Switch tabs to sign in.`,
       };
     }
-    const publicUser: PublicUser = { email: account.email, name: account.name, role: account.role };
+    const publicUser: PublicUser = { email: account.email, name: account.name, role: account.role, ...account };
     setSession(publicUser);
     setUser(publicUser);
     return { ok: true as const };
   }, []);
 
-  const signup = useCallback((name: string, email: string, password: string, role: UserRole) => {
-    const normalizedEmail = email.trim().toLowerCase();
-    if (!name.trim() || !normalizedEmail || password.length < 4) {
-      return { ok: false as const, error: 'Please fill in all fields (password min. 4 characters).' };
-    }
-    if (findUser(normalizedEmail)) {
-      return { ok: false as const, error: 'An account with this email already exists.' };
-    }
-    const account = createUser({ name: name.trim(), email: normalizedEmail, password, role });
-    const publicUser: PublicUser = { email: account.email, name: account.name, role: account.role };
-    setSession(publicUser);
-    setUser(publicUser);
-    return { ok: true as const };
-  }, []);
+  const signup = useCallback(
+    (
+      name: string,
+      email: string,
+      password: string,
+      role: UserRole,
+      profileData?: Partial<PublicUser>
+    ) => {
+      const normalizedEmail = email.trim().toLowerCase();
+      if (!name.trim() || !normalizedEmail || password.length < 4) {
+        return { ok: false as const, error: 'Please fill in all required fields (password min. 4 characters).' };
+      }
+      if (findUser(normalizedEmail)) {
+        return { ok: false as const, error: 'An account with this email already exists.' };
+      }
+      const account = createUser({
+        name: name.trim(),
+        email: normalizedEmail,
+        password,
+        role,
+        profileData,
+      });
+      const publicUser: PublicUser = {
+        email: account.email,
+        name: account.name,
+        role: account.role,
+        ...account,
+      };
+      setSession(publicUser);
+      setUser(publicUser);
+      return { ok: true as const };
+    },
+    []
+  );
 
   const logout = useCallback(() => {
     clearSession();

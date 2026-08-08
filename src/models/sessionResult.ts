@@ -1,3 +1,22 @@
+export interface LandmarkPoint {
+  x: number;
+  y: number;
+  z?: number;
+  visibility?: number;
+}
+
+export interface RecordedFrame {
+  timestamp: number;
+  landmarks: LandmarkPoint[];
+  isPositionOk: boolean;
+  jointAngles: {
+    elbow: number;
+    knee: number;
+    hip: number;
+    shoulder: number;
+  };
+}
+
 export interface SessionResult {
   id?: number;
   exerciseId: string;
@@ -13,6 +32,10 @@ export interface SessionResult {
    * rows saved before this field existed.
    */
   userEmail?: string;
+  /**
+   * Recorded biomechanical skeleton landmark frames for Digital Twin playback & coach review.
+   */
+  recordedFrames?: RecordedFrame[];
 }
 
 export interface ScoutNote {
@@ -23,3 +46,4 @@ export interface ScoutNote {
   note: string;
   createdAt: string; // ISO 8601
 }
+

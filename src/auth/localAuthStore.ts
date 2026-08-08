@@ -214,17 +214,37 @@ export function findUser(email: string): OnFormUser | undefined {
   return users.find((u) => u.email.toLowerCase() === normalized);
 }
 
-export function createUser(input: { name: string; email: string; password: string; role: UserRole }): OnFormUser {
+export function createUser(input: {
+  name: string;
+  email: string;
+  password: string;
+  role: UserRole;
+  profileData?: Partial<AthleteProfile>;
+}): OnFormUser {
   const users = readUsers();
+  const extra = input.profileData || {};
+
   const user: OnFormUser = {
-    ...input,
+    name: input.name,
+    email: input.email,
+    password: input.password,
+    role: input.role,
     createdAt: new Date().toISOString(),
     athleteId: `ATH-${Math.floor(1000 + Math.random() * 9000)}`,
-    scoutScore: 75,
-    formAccuracy: 80,
-    consistencyScore: 80,
+    scoutScore: extra.scoutScore ?? 82,
+    formAccuracy: extra.formAccuracy ?? 85,
+    consistencyScore: extra.consistencyScore ?? 88,
+    strengthScore: extra.strengthScore ?? 80,
+    enduranceScore: extra.enduranceScore ?? 82,
+    speedScore: extra.speedScore ?? 85,
+    agilityScore: extra.agilityScore ?? 84,
+    balanceScore: extra.balanceScore ?? 80,
+    flexibilityScore: extra.flexibilityScore ?? 78,
+    jumpHeight: extra.jumpHeight ?? 60,
+    sprintTime: extra.sprintTime ?? 11.5,
     recruitmentStatus: 'Pending',
     contactDetails: input.email,
+    ...extra,
   };
   users.push(user);
   writeUsers(users);
@@ -257,8 +277,9 @@ const STATUS_PRIORITY: RecruitmentStatus[] = [
  * Rules:
  *  1. If ANY scout gave a positive decision (Recruited/Shortlisted/Trial Invited/Under Review),
  *     use the highest-priority positive decision.
- *  2. If ALL scouts rejected → 'Rejected'.
- *  3. If SOME scouts rejected but at least one hasn't decided (or no positive) → 'Watchlist'.
+ *  2. If ALL registered scouts rejected → 'Rejected'.
+ *  3. If SOME scouts rejected (or reviewed) but at least one scout hasn't decided (or positive decision not given),
+ *     the status remains 'Watchlist' so the athlete stays on the talent radar.
  *  4. If no decisions at all → 'Pending'.
  *
  * Returns { status, bestScoutName, bestScoutEmail } so the athlete knows who selected them.
@@ -272,20 +293,21 @@ export function deriveAthleteStatus(decisions: ScoutDecision[]): {
     return { status: 'Pending', bestScoutName: null, bestScoutEmail: null };
   }
 
+  // Count registered active scouts in the platform
+  const allUsers = readUsers();
+  const totalScouts = Math.max(1, allUsers.filter((u) => u.role === 'scout').length);
+
   // Find the highest-priority positive decision
   let bestDecision: ScoutDecision | null = null;
   let bestPriority = STATUS_PRIORITY.length; // worst
 
-  let allRejected = true;
-  let hasReject = false;
+  let rejectCount = 0;
 
   for (const d of decisions) {
     if (d.decision === 'Rejected') {
-      hasReject = true;
+      rejectCount++;
       continue;
     }
-    // Any non-rejected decision means not all are rejected
-    allRejected = false;
 
     const idx = STATUS_PRIORITY.indexOf(d.decision);
     if (idx !== -1 && idx < bestPriority) {
@@ -294,6 +316,7 @@ export function deriveAthleteStatus(decisions: ScoutDecision[]): {
     }
   }
 
+  // Positive decision takes highest precedence
   if (bestDecision) {
     return {
       status: bestDecision.decision,
@@ -302,12 +325,13 @@ export function deriveAthleteStatus(decisions: ScoutDecision[]): {
     };
   }
 
-  if (allRejected) {
+  // If ALL registered scouts have rejected, only then mark as Rejected
+  if (rejectCount >= totalScouts) {
     return { status: 'Rejected', bestScoutName: null, bestScoutEmail: null };
   }
 
-  // Some scouts rejected but no positive decisions yet → Watchlist
-  if (hasReject) {
+  // If at least one scout rejected or reviewed, but other scouts haven't evaluated yet -> Watchlist
+  if (rejectCount > 0 || decisions.length > 0) {
     return { status: 'Watchlist', bestScoutName: null, bestScoutEmail: null };
   }
 
