@@ -7,6 +7,7 @@ import { updateAthleteStatus } from '../../auth/localAuthStore';
 import type { RecruitmentStatus } from '../../auth/user';
 import { ScoutFilters, type FilterState } from '../../components/scout/ScoutFilters';
 import { AthletePerformanceModal } from '../../components/scout/AthletePerformanceModal';
+import { ScoutDigitalTwinReplay } from '../../components/scout/ScoutDigitalTwinReplay';
 
 type ScoutTab = 'roster' | 'recruited' | 'shortlisted' | 'watchlist' | 'rejected';
 
@@ -60,14 +61,18 @@ function SuggestionChip({ session }: { session: SessionResult }) {
 
 function AthleteSessionRow({
   session,
+  athleteName,
   scoutEmail,
   onAddNote,
   notes,
+  onOpenReplay,
 }: {
   session: SessionResult;
+  athleteName: string;
   scoutEmail: string;
   onAddNote: (sessionId: number, note: string) => void;
   notes: { note: string; createdAt: string; scoutName: string }[];
+  onOpenReplay: (session: SessionResult) => void;
 }) {
   const exercise = getExerciseById(session.exerciseId);
   const [draft, setDraft] = useState('');
@@ -85,12 +90,22 @@ function AthleteSessionRow({
             <p className="text-muted text-xs font-mono">{new Date(session.timestamp).toLocaleString()}</p>
           </div>
         </div>
-        <button
-          onClick={() => setOpen((v) => !v)}
-          className="text-xs font-semibold px-3 py-1.5 rounded-xl border border-[var(--glass-border)] bg-[var(--color-background)] text-primary hover:border-primary/40 transition-colors"
-        >
-          {open ? 'Hide Details ▲' : 'Review & Notes ▼'}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => onOpenReplay(session)}
+            className="text-xs font-bold px-3 py-1.5 rounded-xl border border-primary/30 bg-primary/10 text-primary hover:bg-primary hover:text-black transition-all flex items-center gap-1.5"
+            title="Watch Digital Twin 3D skeleton playback of this workout set"
+          >
+            <span>🎬</span>
+            <span>Digital Twin Replay</span>
+          </button>
+          <button
+            onClick={() => setOpen((v) => !v)}
+            className="text-xs font-semibold px-3 py-1.5 rounded-xl border border-[var(--glass-border)] bg-[var(--color-background)] text-muted hover:text-white hover:border-primary/40 transition-colors"
+          >
+            {open ? 'Hide ▲' : 'Notes ▼'}
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-4 gap-2 mt-3 text-center pt-3 border-t border-[var(--glass-border)]">
@@ -177,6 +192,7 @@ function AthleteCard({
   notesBySession,
   onAddNote,
   onOpenPerformanceModal,
+  onOpenReplay,
   onStatusChange,
 }: {
   athlete: ParticipantSummary;
@@ -185,6 +201,7 @@ function AthleteCard({
   notesBySession: Record<number, { note: string; createdAt: string; scoutName: string }[]>;
   onAddNote: (sessionId: number, note: string) => void;
   onOpenPerformanceModal: (athlete: ParticipantSummary) => void;
+  onOpenReplay: (session: SessionResult, athlete: ParticipantSummary) => void;
   onStatusChange: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
@@ -322,9 +339,11 @@ function AthleteCard({
               <AthleteSessionRow
                 key={s.id}
                 session={s}
+                athleteName={athlete.name}
                 scoutEmail={scoutEmail}
                 notes={s.id != null ? notesBySession[s.id] ?? [] : []}
                 onAddNote={onAddNote}
+                onOpenReplay={() => onOpenReplay(s, athlete)}
               />
             ))}
           </div>
@@ -419,6 +438,10 @@ export function ScoutDashboard() {
   const [activeTab, setActiveTab] = useState<ScoutTab>('roster');
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
   const [selectedAthleteForModal, setSelectedAthleteForModal] = useState<ParticipantSummary | null>(null);
+  const [selectedReplayData, setSelectedReplayData] = useState<{
+    session: SessionResult;
+    athlete: ParticipantSummary;
+  } | null>(null);
 
   const [filters, setFilters] = useState<FilterState>({
     searchQuery: '',
@@ -482,17 +505,18 @@ export function ScoutDashboard() {
   }, [participants]);
 
   // Tab Filtering:
-  // 1. 'roster' (Global Pool) => athletes NOT recruited or rejected by ANY scout
+  // 1. 'roster' (Global Pool) => athletes NOT recruited by ANY scout, and NOT rejected by THIS logged-in scout
+  //    (if another scout rejected this athlete, this scout can still evaluate and recruit them!)
   // 2. 'recruited', 'shortlisted', 'watchlist', 'rejected' => ONLY athletes personally assigned by logged-in scout
   const athletesInCurrentTab = useMemo(() => {
     return participants.filter((p) => {
       const hasRecruitedByAny = p.scoutDecisions?.some((d) => d.decision === 'Recruited') ?? false;
-      const hasRejectedByAny = p.scoutDecisions?.some((d) => d.decision === 'Rejected') ?? false;
       const myDec = p.myDecision?.decision;
 
       if (activeTab === 'roster') {
-        // Global Pool: show all athletes not recruited or rejected by any scout
-        return !hasRecruitedByAny && !hasRejectedByAny;
+        // Global Pool: show all athletes not already recruited by any scout,
+        // and not rejected by THIS logged in scout (other scout rejections do NOT hide the athlete from this scout!)
+        return !hasRecruitedByAny && myDec !== 'Rejected';
       }
       if (activeTab === 'recruited') {
         // Strictly scoped to current scout
@@ -536,6 +560,14 @@ export function ScoutDashboard() {
 
     if (filters.gender) {
       result = result.filter((p) => p.gender === filters.gender);
+    }
+
+    if (filters.minAge !== null) {
+      result = result.filter((p) => (p.age ?? 19) >= filters.minAge!);
+    }
+
+    if (filters.maxAge !== null) {
+      result = result.filter((p) => (p.age ?? 19) <= filters.maxAge!);
     }
 
     if (filters.sport) {
@@ -628,7 +660,7 @@ export function ScoutDashboard() {
             Welcome, {user?.name ?? 'Coach Priya'}
           </h1>
           <p className="text-muted text-sm mt-1">
-            Real-time biomechanical intelligence, categorized talent management & recruitment actions.
+            Real-time biomechanical intelligence, Digital Twin set replays & recruitment actions.
           </p>
         </div>
 
@@ -860,6 +892,7 @@ export function ScoutDashboard() {
               notesBySession={notesBySession}
               onAddNote={(sessionId, note) => addNote(sessionId, user!.email, user!.name, note)}
               onOpenPerformanceModal={setSelectedAthleteForModal}
+              onOpenReplay={(session, ath) => setSelectedReplayData({ session, athlete: ath })}
               onStatusChange={refresh}
             />
           ))}
@@ -889,9 +922,19 @@ export function ScoutDashboard() {
                     <button
                       onClick={() => setSelectedAthleteForModal(a)}
                       className="text-primary hover:underline text-[10px]"
+                      title="View Full Athlete Analytics"
                     >
                       📊
                     </button>
+                    {a.sessions.length > 0 && (
+                      <button
+                        onClick={() => setSelectedReplayData({ session: a.sessions[0], athlete: a })}
+                        className="text-amber-400 hover:underline text-[10px]"
+                        title="Watch Latest Digital Twin Set Replay"
+                      >
+                        🎬
+                      </button>
+                    )}
                   </td>
                   <td className="py-3.5 px-3 text-muted">{a.athleteId ?? 'ATH-1001'}</td>
                   <td className="py-3.5 px-3 text-primary">{a.sport ?? 'Football'}</td>
@@ -962,8 +1005,33 @@ export function ScoutDashboard() {
         <AthletePerformanceModal
           athlete={selectedAthleteForModal}
           onClose={() => setSelectedAthleteForModal(null)}
+          onOpenReplay={(session) =>
+            setSelectedReplayData({ session, athlete: selectedAthleteForModal })
+          }
+        />
+      )}
+
+      {/* Scout Digital Twin 3D Motion Replay Modal */}
+      {selectedReplayData && (
+        <ScoutDigitalTwinReplay
+          session={selectedReplayData.session}
+          athleteName={selectedReplayData.athlete.name}
+          athleteEmail={selectedReplayData.athlete.email}
+          athleteSport={selectedReplayData.athlete.sport}
+          scoutName={user?.name ?? 'Coach Priya'}
+          scoutEmail={user?.email ?? 'scout@onform.app'}
+          existingNotes={
+            selectedReplayData.session.id != null
+              ? notesBySession[selectedReplayData.session.id] ?? []
+              : []
+          }
+          onAddNote={(sessionId, note) => {
+            addNote(sessionId, user!.email, user?.name ?? 'Coach Priya', note);
+          }}
+          onClose={() => setSelectedReplayData(null)}
         />
       )}
     </div>
   );
 }
+

@@ -12,13 +12,15 @@ import {
   Tooltip,
 } from 'recharts';
 import type { ParticipantSummary } from '../../hooks/useScoutData';
+import type { SessionResult } from '../../models/sessionResult';
 
 interface Props {
   athlete: ParticipantSummary;
   onClose: () => void;
+  onOpenReplay?: (session: SessionResult) => void;
 }
 
-export const AthletePerformanceModal: React.FC<Props> = ({ athlete, onClose }) => {
+export const AthletePerformanceModal: React.FC<Props> = ({ athlete, onClose, onOpenReplay }) => {
   // 1. Radar Chart of Skills Data
   const radarData = [
     { subject: 'Strength', score: athlete.strengthScore ?? 85 },
@@ -138,11 +140,25 @@ export const AthletePerformanceModal: React.FC<Props> = ({ athlete, onClose }) =
           </div>
         </div>
 
-        {/* 3. Personal Best Tracker */}
-        <div className="glass-card p-5 border border-[var(--glass-border)] space-y-3">
-          <h4 className="font-bold text-sm text-white flex items-center gap-2">
-            <span>🏆</span> Personal Best Tracker
-          </h4>
+        {/* 3. Personal Best Tracker & Digital Twin Replay CTA */}
+        <div className="glass-card p-5 border border-[var(--glass-border)] space-y-4">
+          <div className="flex items-center justify-between">
+            <h4 className="font-bold text-sm text-white flex items-center gap-2">
+              <span>🏆</span> Personal Best & Biomechanical Telemetry
+            </h4>
+            {athlete.sessions.length > 0 && onOpenReplay && (
+              <button
+                onClick={() => {
+                  onClose();
+                  onOpenReplay(athlete.sessions[0]);
+                }}
+                className="px-3 py-1.5 rounded-xl text-xs font-bold bg-primary/20 text-primary border border-primary/40 hover:bg-primary hover:text-black transition-all flex items-center gap-1.5"
+              >
+                <span>🎬</span>
+                <span>Replay Latest Workout Set</span>
+              </button>
+            )}
+          </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
             <div className="bg-surface p-3 rounded-xl border border-[var(--glass-border)]">
               <span className="text-[10px] text-muted uppercase font-mono block">PB Valid Reps</span>
@@ -166,3 +182,4 @@ export const AthletePerformanceModal: React.FC<Props> = ({ athlete, onClose }) =
     </div>
   );
 };
+

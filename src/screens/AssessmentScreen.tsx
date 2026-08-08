@@ -40,14 +40,64 @@ export function AssessmentScreen() {
   const cheatTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const coachCueTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hadPreviousFormBreakRef = useRef(false);
+  const recordedFramesRef = useRef<Array<{
+    timestamp: number;
+    landmarks: Array<{ x: number; y: number; z?: number; visibility?: number }>;
+    isPositionOk: boolean;
+    jointAngles: { elbow: number; knee: number; hip: number; shoulder: number };
+  }>>([]);
+  const frameSampleCountRef = useRef(0);
 
   const { status, processFrame, reset } = useExerciseTracker(exercise);
+
+  // Angle calculator for snapshot recording
+  const calculateJointAngle = (
+    a: { x: number; y: number },
+    b: { x: number; y: number },
+    c: { x: number; y: number }
+  ): number => {
+    const radians = Math.atan2(c.y - b.y, c.x - b.x) - Math.atan2(a.y - b.y, a.x - b.x);
+    let angle = Math.abs((radians * 180.0) / Math.PI);
+    if (angle > 180.0) {
+      angle = 360.0 - angle;
+    }
+    return Math.round(angle);
+  };
 
   const handlePoseResult = useCallback(
     (landmarks: Parameters<typeof processFrame>[0], worldLandmarks: Parameters<typeof processFrame>[1]) => {
       processFrame(landmarks, worldLandmarks);
+
+      // Sample every 4th frame (~7-8 fps) during active recording to keep IndexedDB footprint lean & efficient
+      if (phase === 'active' && landmarks && landmarks.length >= 25) {
+        frameSampleCountRef.current++;
+        if (frameSampleCountRef.current % 4 === 0) {
+          const p = landmarks;
+          const elbow = calculateJointAngle(p[11], p[13], p[15]);
+          const knee = calculateJointAngle(p[23], p[25], p[27]);
+          const hip = calculateJointAngle(p[11], p[23], p[25]);
+          const shoulder = calculateJointAngle(p[13], p[11], p[23]);
+
+          recordedFramesRef.current.push({
+            timestamp: Date.now(),
+            landmarks: p.map((lm) => ({
+              x: lm.x,
+              y: lm.y,
+              z: lm.z,
+              visibility: lm.visibility,
+            })),
+            isPositionOk: status.isPositionOk,
+            jointAngles: { elbow, knee, hip, shoulder },
+          });
+
+          // Limit to max 350 sampled frames (~45-50s)
+          if (recordedFramesRef.current.length > 350) {
+            recordedFramesRef.current.shift();
+          }
+        }
+      }
     },
-    [processFrame]
+    [processFrame, phase, status.isPositionOk]
   );
 
   const { landmarks, state: poseState } = usePoseDetection({
@@ -118,6 +168,8 @@ export function AssessmentScreen() {
 
   const handleStart = useCallback(() => {
     reset();
+    recordedFramesRef.current = [];
+    frameSampleCountRef.current = 0;
     startTimeRef.current = performance.now();
     setPhase('active');
   }, [reset]);
@@ -140,6 +192,7 @@ export function AssessmentScreen() {
       accuracy,
       durationSeconds,
       timestamp: new Date().toISOString(),
+      recordedFrames: [...recordedFramesRef.current],
     };
 
     setSavedSession(session);
@@ -155,6 +208,8 @@ export function AssessmentScreen() {
 
   const handleTryAgain = useCallback(() => {
     reset();
+    recordedFramesRef.current = [];
+    frameSampleCountRef.current = 0;
     setSavedSession(null);
     setPhase('preview');
   }, [reset]);
